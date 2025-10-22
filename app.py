@@ -172,56 +172,6 @@ def get_eval_metrics(data_scaled, max_k=10):
     return list(K_range), inertia, list(K_range_eval)[:len(sil_scores)], sil_scores, db_scores
 
 # --- Fungsi Plotting (Matplotlib & Seaborn) ---
-def plot_correlation_heatmap(df, numeric_cols, title):
-    """Tampilkan heatmap korelasi."""
-    if not numeric_cols or df[numeric_cols].empty: return
-    fig, ax = plt.subplots(figsize=(7, 5))
-    sns.heatmap(df[numeric_cols].corr(), annot=True, cmap='YlGnBu', fmt=".2f", annot_kws={"size": 8}, ax=ax)
-    ax.set_title(title)
-    ax.tick_params(axis='x', rotation=45, labelsize=8)
-    ax.tick_params(axis='y', rotation=0, labelsize=8)
-    st.pyplot(fig); plt.clf()
-
-def plot_avg_timeseries(df, numeric_cols, title):
-    """Tampilkan line plot rata-rata per tahun."""
-    if not numeric_cols or 'Tahun' not in df.columns or df.empty: return
-    avg_per_year = df.groupby('Tahun')[numeric_cols].mean()
-    fig, ax = plt.subplots(figsize=(8, 5))
-    avg_per_year.plot(kind='line', marker='o', markersize=4, ax=ax)
-    ax.set_title(title)
-    ax.set_ylabel("Rata-rata Nilai (Juta USD)")
-    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
-    ax.tick_params(axis='x', rotation=45)
-    st.pyplot(fig); plt.clf()
-
-def plot_evaluation_graphs(K, inertia, K_eval, sil_scores, db_scores):
-    """Tampilkan 3 plot evaluasi K."""
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if K and inertia:
-            fig, ax = plt.subplots(figsize=(6, 4))
-            ax.plot(K, inertia, 'bo-'); ax.set_title('Metode Elbow')
-            ax.set_xlabel('Jumlah Cluster (k)'); ax.set_ylabel('Inertia')
-            st.pyplot(fig); plt.clf(); st.caption("Siku di K=3.")
-    with col2:
-        if K_eval and sil_scores:
-            fig, ax = plt.subplots(figsize=(6, 4))
-            ax.plot(K_eval, sil_scores, 'go-'); ax.set_title('Silhouette Score')
-            ax.set_xlabel('Jumlah Cluster (K)'); ax.set_ylabel('Score')
-            st.pyplot(fig); plt.clf()
-            max_k = K_eval[np.nanargmax(sil_scores)] if K_eval and not all(np.isnan(sil_scores)) else 'N/A'
-            max_s = np.nanmax(sil_scores) if K_eval and not all(np.isnan(sil_scores)) else 'N/A'
-            st.caption(f"Max di K={max_k} ({max_s:.3f}).")
-    with col3:
-        if K_eval and db_scores:
-            fig, ax = plt.subplots(figsize=(6, 4))
-            ax.plot(K_eval, db_scores, 'ro-'); ax.set_title('Davies-Bouldin Index')
-            ax.set_xlabel('Jumlah Cluster (K)'); ax.set_ylabel('Index')
-            st.pyplot(fig); plt.clf()
-            min_k = K_eval[np.nanargmin(db_scores)] if K_eval and not all(np.isnan(db_scores)) else 'N/A'
-            min_s = np.nanmin(db_scores) if K_eval and not all(np.isnan(db_scores)) else 'N/A'
-            st.caption(f"Min di K={min_k} ({min_s:.3f}).")
-
 def plot_cluster_countplot(df, category_col, order, palette):
     """Tampilkan countplot distribusi cluster."""
     if category_col not in df.columns: return
@@ -315,79 +265,54 @@ if data_ekspor or data_impor:
             pca_cols_e = data_ekspor["pca_cols"]
             summary_cat_e = data_ekspor["summary_by_category"]
 
-            tab_eda_e, tab_model_e, tab_hasil_e, tab_kesimpulan_e = st.tabs(["📊 EDA", "🤖 Model", "📈 Hasil", "📜 Kesimpulan"])
+            st.subheader("Hasil Clustering (K=3)")
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                plot_cluster_countplot(df_e, cat_col_e, color_order_ekspor, palette_ekspor)
+                st.write("**Evaluasi Final (K=3)**")
+                if len(df_e[cluster_col_e].unique()) > 1:
+                    st.metric("Silhouette Score", f"{silhouette_score(scaled_e, df_e[cluster_col_e]):.3f}")
+                    st.metric("Davies-Bouldin Index", f"{davies_bouldin_score(scaled_e, df_e[cluster_col_e]):.3f}")
+            with col2:
+                plot_cluster_comparison_bar(summary_cat_e, color_order_ekspor, color_map)
 
-            with tab_eda_e:
-                st.subheader("Eksplorasi Data Awal")
-                col1, col2 = st.columns(2)
-                with col1: plot_correlation_heatmap(df_e, num_cols_e, "Korelasi Sektor Ekspor")
-                with col2: plot_avg_timeseries(df_e, num_cols_e, "Rata-rata Ekspor per Sektor per Tahun")
+            st.divider(); st.write("**Distribusi Kategori per Tahun**")
+            plot_yearly_distribution_stackedbar(df_e, cat_col_e, color_order_ekspor, color_map)
 
-            with tab_model_e:
-                st.subheader("Penentuan K Optimal")
-                K_e, inertia_e, K_eval_e, sil_e, db_e = get_eval_metrics(scaled_e)
-                plot_evaluation_graphs(K_e, inertia_e, K_eval_e, sil_e, db_e)
-
-            with tab_hasil_e:
-                st.subheader("Hasil Clustering (K=3)")
-                col1, col2 = st.columns([1, 2])
-                with col1:
-                    plot_cluster_countplot(df_e, cat_col_e, color_order_ekspor, palette_ekspor)
-                    st.write("**Evaluasi Final (K=3)**")
-                    if len(df_e[cluster_col_e].unique()) > 1:
-                        st.metric("Silhouette Score", f"{silhouette_score(scaled_e, df_e[cluster_col_e]):.3f}")
-                        st.metric("Davies-Bouldin Index", f"{davies_bouldin_score(scaled_e, df_e[cluster_col_e]):.3f}")
-                with col2:
-                    plot_cluster_comparison_bar(summary_cat_e, color_order_ekspor, color_map)
-
-                st.divider(); st.write("**Distribusi Kategori per Tahun**")
-                plot_yearly_distribution_stackedbar(df_e, cat_col_e, color_order_ekspor, color_map)
-
-                st.divider(); st.subheader("Analisis Mendalam per Tahun")
-                years_e = sorted(df_e['Tahun'].unique(), reverse=True)
-                year_e = st.selectbox("Pilih Tahun Ekspor:", years_e, key='sel_year_e')
-                df_year_e = df_e[df_e['Tahun'] == year_e]
-                col1_yr, col2_yr = st.columns([2, 1])
-                with col1_yr:
-                    fig_yr = plot_yearly_detail_bar(df_year_e, num_cols_e, year_e, "Sektor")
-                    if fig_yr: st.pyplot(fig_yr); plt.clf()
-                    else: st.warning(f"Tidak ada data ekspor untuk tahun {year_e}.")
-                with col2_yr:
-                    if not df_year_e.empty:
-                        st.write("**Distribusi Kategori**"); st.dataframe(df_year_e[cat_col_e].value_counts())
-                        st.write("**Rata-rata Sektor**"); st.dataframe(df_year_e[num_cols_e].mean().round(2))
+            st.divider(); st.subheader("Analisis Mendalam per Tahun")
+            years_e = sorted(df_e['Tahun'].unique(), reverse=True)
+            year_e = st.selectbox("Pilih Tahun Ekspor:", years_e, key='sel_year_e')
+            df_year_e = df_e[df_e['Tahun'] == year_e]
+            col1_yr, col2_yr = st.columns([2, 1])
+            with col1_yr:
+                fig_yr = plot_yearly_detail_bar(df_year_e, num_cols_e, year_e, "Sektor")
+                if fig_yr: st.pyplot(fig_yr); plt.clf()
+                else: st.warning(f"Tidak ada data ekspor untuk tahun {year_e}.")
+            with col2_yr:
                 if not df_year_e.empty:
-                    st.write("**Detail Analisis Data**")
-                    cols_show_yr = ['Bulan', cat_col_e, 'Total'] + num_cols_e
-                    st.dataframe(df_year_e[[c for c in cols_show_yr if c in df_year_e.columns]])
+                    st.write("**Distribusi Kategori**"); st.dataframe(df_year_e[cat_col_e].value_counts())
+                    st.write("**Rata-rata Sektor**"); st.dataframe(df_year_e[num_cols_e].mean().round(2))
+            if not df_year_e.empty:
+                st.write("**Detail Analisis Data**")
+                cols_show_yr = ['Bulan', cat_col_e, 'Total'] + num_cols_e
+                st.dataframe(df_year_e[[c for c in cols_show_yr if c in df_year_e.columns]])
 
 
-                st.divider(); st.subheader("Visualisasi Cluster PCA")
-                col1_pca, col2_pca = st.columns(2)
-                with col1_pca:
-                    if '2D' in pca_cols_e: plot_pca_2d(df_e, cat_col_e, pca_cols_e['2D'], color_order_ekspor, color_map)
-                with col2_pca:
-                    # Plot 3D Ekspor: PCA1, PCA2, Total
-                    if '2D' in pca_cols_e and 'Total' in df_e.columns:
-                        plot_pca_3d(df_e, cat_col_e, pca_cols_e['2D'] + ['DUMMY_PCA3'], # Butuh 3 nama kolom
-                                    cluster_col_e, color_map, "Cluster Ekspor 3D", z_col='Total', z_label="Total (Juta USD)")
+            st.divider(); st.subheader("Visualisasi Cluster PCA")
+            col1_pca, col2_pca = st.columns(2)
+            with col1_pca:
+                if '2D' in pca_cols_e: plot_pca_2d(df_e, cat_col_e, pca_cols_e['2D'], color_order_ekspor, color_map)
+            with col2_pca:
+                # Plot 3D Ekspor: PCA1, PCA2, Total
+                if '2D' in pca_cols_e and 'Total' in df_e.columns:
+                    plot_pca_3d(df_e, cat_col_e, pca_cols_e['2D'] + ['DUMMY_PCA3'], # Butuh 3 nama kolom
+                                cluster_col_e, color_map, "Cluster Ekspor 3D", z_col='Total', z_label="Total (Juta USD)")
 
 
-                st.divider(); st.subheader("💾 Download Data Ekspor Hasil Analisis")
-                csv_e = df_e.to_csv(index=False).encode('utf-8')
-                st.download_button("📥 Download Data Ekspor (.csv)", csv_e, f"hasil_ekspor_{pd.Timestamp.now():%Y%m%d_%H%M}.csv", "text/csv", key="dl_e")
+            st.divider(); st.subheader("💾 Download Data Ekspor Hasil Analisis")
+            csv_e = df_e.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Download Data Ekspor (.csv)", csv_e, f"hasil_ekspor_{pd.Timestamp.now():%Y%m%d_%H%M}.csv", "text/csv", key="dl_e")
 
-            with tab_kesimpulan_e:
-                st.subheader("Interpretasi & Kesimpulan Ekspor")
-                st.success("**Kesimpulan Utama:**")
-                st.markdown("""
-                * **Ekspor Tinggi:** Didominasi nilai **MIGAS** tinggi. Muncul sporadis, kemungkinan terkait harga energi global.
-                * **Ekspor Sedang:** Lebih seimbang, didorong **NON MIGAS** (Industry, Mining). Makin dominan di tahun akhir.
-                * **Ekspor Rendah:** Nilai rendah di semua sektor. Dominan di tahun-tahun awal (2012-2016).
-                * **Perubahan Struktur:** Terjadi pergeseran dari dominasi Ekspor Rendah ke Ekspor Sedang (non-migas) di akhir periode.
-                """)
-                st.subheader("Rata-Rata Nilai Asli per Kategori")
-                st.dataframe(summary_cat_e.T)
         else:
             st.warning("Data ekspor tidak dapat dimuat atau diproses.")
 
@@ -404,75 +329,50 @@ if data_ekspor or data_impor:
             pca_cols_i = data_impor["pca_cols"]
             summary_cat_i = data_impor["summary_by_category"] # Summary nilai asli
 
-            tab_eda_i, tab_model_i, tab_hasil_i, tab_kesimpulan_i = st.tabs(["📊 EDA", "🤖 Model", "📈 Hasil", "📜 Kesimpulan"])
+            st.subheader("Hasil Clustering (K=3)")
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                plot_cluster_countplot(df_i, cat_col_i, color_order_impor, palette_impor)
+                st.write("**Evaluasi Final (K=3 pada Proporsi)**")
+                if len(df_i[cluster_col_i].unique()) > 1:
+                    st.metric("Silhouette Score", f"{silhouette_score(scaled_i, df_i[cluster_col_i]):.3f}")
+                    st.metric("Davies-Bouldin Index", f"{davies_bouldin_score(scaled_i, df_i[cluster_col_i]):.3f}")
+            with col2:
+                plot_cluster_comparison_bar(summary_cat_i, color_order_impor, color_map)
 
-            with tab_eda_i:
-                st.subheader("Eksplorasi Data Awal")
-                col1, col2 = st.columns(2)
-                with col1: plot_correlation_heatmap(df_i, num_cols_i, "Korelasi Kategori Impor (Nilai Asli)")
-                with col2: plot_avg_timeseries(df_i, num_cols_i, "Rata-rata Impor per Kategori per Tahun")
+            st.divider(); st.write("**Distribusi Kategori per Tahun**")
+            plot_yearly_distribution_stackedbar(df_i, cat_col_i, color_order_impor, color_map)
 
-            with tab_model_i:
-                st.subheader("Penentuan K Optimal (berdasarkan Proporsi)")
-                K_i, inertia_i, K_eval_i, sil_i, db_i = get_eval_metrics(scaled_i)
-                plot_evaluation_graphs(K_i, inertia_i, K_eval_i, sil_i, db_i)
-
-            with tab_hasil_i:
-                st.subheader("Hasil Clustering (K=3)")
-                col1, col2 = st.columns([1, 2])
-                with col1:
-                    plot_cluster_countplot(df_i, cat_col_i, color_order_impor, palette_impor)
-                    st.write("**Evaluasi Final (K=3 pada Proporsi)**")
-                    if len(df_i[cluster_col_i].unique()) > 1:
-                       st.metric("Silhouette Score", f"{silhouette_score(scaled_i, df_i[cluster_col_i]):.3f}")
-                       st.metric("Davies-Bouldin Index", f"{davies_bouldin_score(scaled_i, df_i[cluster_col_i]):.3f}")
-                with col2:
-                    plot_cluster_comparison_bar(summary_cat_i, color_order_impor, color_map)
-
-                st.divider(); st.write("**Distribusi Kategori per Tahun**")
-                plot_yearly_distribution_stackedbar(df_i, cat_col_i, color_order_impor, color_map)
-
-                st.divider(); st.subheader("Analisis Mendalam per Tahun")
-                years_i = sorted(df_i['Tahun'].unique(), reverse=True)
-                year_i = st.selectbox("Pilih Tahun Impor:", years_i, key='sel_year_i')
-                df_year_i = df_i[df_i['Tahun'] == year_i]
-                col1_yr_i, col2_yr_i = st.columns([2, 1])
-                with col1_yr_i:
-                    fig_yr_i = plot_yearly_detail_bar(df_year_i, num_cols_i, year_i, "Kategori Impor")
-                    if fig_yr_i: st.pyplot(fig_yr_i); plt.clf()
-                    else: st.warning(f"Tidak ada data impor untuk tahun {year_i}.")
-                with col2_yr_i:
-                    if not df_year_i.empty:
-                        st.write("**Distribusi Kategori**"); st.dataframe(df_year_i[cat_col_i].value_counts())
-                        st.write("**Rata-rata Kategori**"); st.dataframe(df_year_i[num_cols_i].mean().round(2))
+            st.divider(); st.subheader("Analisis Mendalam per Tahun")
+            years_i = sorted(df_i['Tahun'].unique(), reverse=True)
+            year_i = st.selectbox("Pilih Tahun Impor:", years_i, key='sel_year_i')
+            df_year_i = df_i[df_i['Tahun'] == year_i]
+            col1_yr_i, col2_yr_i = st.columns([2, 1])
+            with col1_yr_i:
+                fig_yr_i = plot_yearly_detail_bar(df_year_i, num_cols_i, year_i, "Kategori Impor")
+                if fig_yr_i: st.pyplot(fig_yr_i); plt.clf()
+                else: st.warning(f"Tidak ada data impor untuk tahun {year_i}.")
+            with col2_yr_i:
                 if not df_year_i.empty:
-                    st.write("**Detail Analisis Data**")
-                    cols_show_yr_i = ['Bulan', cat_col_i, 'Total'] + num_cols_i
-                    st.dataframe(df_year_i[[c for c in cols_show_yr_i if c in df_year_i.columns]])
+                    st.write("**Distribusi Kategori**"); st.dataframe(df_year_i[cat_col_i].value_counts())
+                    st.write("**Rata-rata Kategori**"); st.dataframe(df_year_i[num_cols_i].mean().round(2))
+            if not df_year_i.empty:
+                st.write("**Detail Analisis Data**")
+                cols_show_yr_i = ['Bulan', cat_col_i, 'Total'] + num_cols_i
+                st.dataframe(df_year_i[[c for c in cols_show_yr_i if c in df_year_i.columns]])
 
-                st.divider(); st.subheader("Visualisasi Cluster PCA (berdasarkan Proporsi)")
-                col1_pca_i, col2_pca_i = st.columns(2)
-                with col1_pca_i:
-                    if '2D' in pca_cols_i: plot_pca_2d(df_i, cat_col_i, pca_cols_i['2D'], color_order_impor, color_map)
-                with col2_pca_i:
-                    if '3D' in pca_cols_i: plot_pca_3d(df_i, cat_col_i, pca_cols_i['3D'], cluster_col_i, color_map, "Cluster Impor 3D (PCA-Proporsi)")
+            st.divider(); st.subheader("Visualisasi Cluster PCA (berdasarkan Proporsi)")
+            col1_pca_i, col2_pca_i = st.columns(2)
+            with col1_pca_i:
+                if '2D' in pca_cols_i: plot_pca_2d(df_i, cat_col_i, pca_cols_i['2D'], color_order_impor, color_map)
+            with col2_pca_i:
+                if '3D' in pca_cols_i: plot_pca_3d(df_i, cat_col_i, pca_cols_i['3D'], cluster_col_i, color_map, "Cluster Impor 3D (PCA-Proporsi)")
 
 
-                st.divider(); st.subheader("💾 Download Data Impor Hasil Analisis")
-                csv_i = df_i.to_csv(index=False).encode('utf-8')
-                st.download_button("📥 Download Data Impor (.csv)", csv_i, f"hasil_impor_{pd.Timestamp.now():%Y%m%d_%H%M}.csv", "text/csv", key="dl_i")
+            st.divider(); st.subheader("💾 Download Data Impor Hasil Analisis")
+            csv_i = df_i.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Download Data Impor (.csv)", csv_i, f"hasil_impor_{pd.Timestamp.now():%Y%m%d_%H%M}.csv", "text/csv", key="dl_i")
 
-            with tab_kesimpulan_i:
-                st.subheader("Interpretasi & Kesimpulan Impor")
-                st.success("**Kesimpulan Utama:**")
-                st.markdown("""
-                * **Impor Tinggi:** Ditandai nilai asli **Consumption Goods** tinggi. Muncul sporadis di awal-pertengahan periode.
-                * **Impor Sedang:** Nilai menengah, **Raw Material Support** dominan secara absolut. Konsisten muncul.
-                * **Impor Rendah:** Nilai total dan per kategori rendah, **Raw Material Support** tetap kontributor utama secara absolut (proporsi makin dominan). Dominan di akhir periode.
-                * **Perubahan Struktur:** Dinamis, dari lonjakan konsumsi -> periode seimbang -> kembali fokus ke bahan baku di akhir.
-                """)
-                st.subheader("Rata-Rata Nilai Asli per Kategori")
-                st.dataframe(summary_cat_i.T)
         else:
             st.warning("Data impor tidak dapat dimuat atau diproses.")
 
@@ -483,96 +383,19 @@ if data_ekspor or data_impor:
         # --- PILIHAN JENIS PERBANDINGAN ---
         comparison_type = st.selectbox(
             "Pilih Jenis Perbandingan:",
-            options=["Ekspor vs. Impor", "Ekspor antar Tahun", "Impor antar Tahun"],
+            options=["Ekspor antar Tahun", "Impor antar Tahun"],
             key="compare_type_select"
         )
         st.markdown("---") # Pemisah
 
         # Hanya jalankan jika data relevan ada
-        if (data_ekspor and data_impor and comparison_type == "Ekspor vs. Impor") or \
-           (data_ekspor and comparison_type == "Ekspor antar Tahun") or \
+        if (data_ekspor and comparison_type == "Ekspor antar Tahun") or \
            (data_impor and comparison_type == "Impor antar Tahun"):
 
             # --- KONTEN BERDASARKAN PILIHAN ---
 
-            # === 1. Ekspor vs. Impor ===
-            if comparison_type == "Ekspor vs. Impor":
-                st.markdown("##### Bandingkan Total Ekspor dan Impor pada Tahun Tertentu")
-                df_e_comp = data_ekspor["df"].copy()
-                df_i_comp = data_impor["df"].copy()
-                try:
-                    common_years = sorted(list(set(df_e_comp['Tahun'].unique()) & set(df_i_comp['Tahun'].unique())))
-                    if not common_years:
-                        st.warning("Tidak ada tahun yang sama antara data ekspor dan impor.")
-                    else:
-                        tahun_comp = st.multiselect(
-                            "Pilih Tahun untuk Perbandingan Ekspor vs. Impor:",
-                            options=common_years,
-                            default=[], # Default kosong
-                            key="comp_year_evsi"
-                        )
-
-                        if tahun_comp:
-                            df_e_comp = df_e_comp[df_e_comp['Tahun'].isin(tahun_comp)]
-                            df_i_comp = df_i_comp[df_i_comp['Tahun'].isin(tahun_comp)]
-                            df_combined = pd.merge(df_e_comp[['Tahun', 'Bulan', 'Total']], df_i_comp[['Tahun', 'Bulan', 'Total']],
-                                                   on=['Tahun', 'Bulan'], suffixes=('_Ekspor', '_Impor'))
-
-                            if df_combined.empty:
-                                st.warning("Tidak ada data bulanan cocok pada tahun terpilih.")
-                            else:
-                                df_combined['Neraca_Perdagangan'] = df_combined['Total_Ekspor'] - df_combined['Total_Impor']
-
-                                st.markdown("###### Ringkasan")
-                                col1, col2, col3, col4 = st.columns(4)
-
-                                with col1: st.metric("Total Ekspor", f"${df_combined['Total_Ekspor'].sum():,.2f}M")
-                                with col2: st.metric("Total Impor", f"${df_combined['Total_Impor'].sum():,.2f}M")
-                                with col3:
-                                    neraca_sum = df_combined['Neraca_Perdagangan'].sum()
-                                    s_d = "Surplus" if neraca_sum > 0 else "Defisit"
-                                    st.metric(f"Neraca: {s_d}", f"${abs(neraca_sum):,.2f}M")
-                                with col4:
-                                    bln_s = len(df_combined[df_combined['Neraca_Perdagangan'] > 0])
-                                    persen_s = (bln_s / len(df_combined)) * 100 if len(df_combined) > 0 else 0
-                                    st.metric("Bulan Surplus", f"{bln_s}/{len(df_combined)} ({persen_s:.1f}%)")
-
-
-                                st.markdown("---")
-                                col1_pl, col2_pl = st.columns(2)
-                                with col1_pl: # Plotly Line Ekspor vs Impor
-                                    df_yr = df_combined.groupby('Tahun').agg({'Total_Ekspor': 'mean', 'Total_Impor': 'mean'}).reset_index()
-                                    fig = go.Figure()
-                                    fig.add_trace(go.Scatter(x=df_yr['Tahun'], y=df_yr['Total_Ekspor'], name='Ekspor', line=dict(color='green')))
-                                    fig.add_trace(go.Scatter(x=df_yr['Tahun'], y=df_yr['Total_Impor'], name='Impor', line=dict(color='red')))
-                                    fig.update_layout(title="Rata-Rata Ekspor vs Impor per Tahun", height=350, margin=dict(t=30, b=10), yaxis_title="Nilai (Juta USD)")
-                                    st.plotly_chart(fig, use_container_width=True)
-                                with col2_pl: # Plotly Bar Neraca
-                                    df_yr_n = df_combined.groupby('Tahun')['Neraca_Perdagangan'].mean().reset_index()
-                                    colors_n = ['green' if x >= 0 else 'red' for x in df_yr_n['Neraca_Perdagangan']]
-                                    fig_n = go.Figure(go.Bar(x=df_yr_n['Tahun'], y=df_yr_n['Neraca_Perdagangan'], marker_color=colors_n))
-                                    fig_n.add_hline(y=0, line_dash="dash", line_color="black")
-                                    fig_n.update_layout(title="Rata-Rata Neraca Perdagangan per Tahun", height=350, margin=dict(t=30, b=10), yaxis_title="Nilai (Juta USD)")
-                                    st.plotly_chart(fig_n, use_container_width=True)
-
-                                st.markdown("###### Tabel Ringkasan per Tahun (Juta USD)")
-                                summary_table = df_combined.groupby('Tahun').agg(
-                                    Ekspor_Avg=('Total_Ekspor', 'mean'), Ekspor_Total=('Total_Ekspor', 'sum'),
-                                    Impor_Avg=('Total_Impor', 'mean'), Impor_Total=('Total_Impor', 'sum'),
-                                    Neraca_Avg=('Neraca_Perdagangan', 'mean'), Neraca_Total=('Neraca_Perdagangan', 'sum')
-                                ).round(2)
-                                st.dataframe(summary_table)
-
-                                st.divider(); st.subheader("💾 Download Data Perbandingan Ekspor vs Impor")
-                                csv_c = df_combined.to_csv(index=False).encode('utf-8')
-                                st.download_button("📥 Download (.csv)", csv_c, f"perbandingan_evsi_{pd.Timestamp.now():%Y%m%d_%H%M}.csv", "text/csv", key="dl_evsi")
-                        else:
-                             st.info("☝️ Silakan pilih tahun untuk melihat perbandingan Ekspor vs. Impor.")
-                except Exception as e:
-                    st.error(f"Error memproses perbandingan Ekspor vs Impor: {e}")
-
-            # === 2. Ekspor antar Tahun ===
-            elif comparison_type == "Ekspor antar Tahun":
+            # === 1. Ekspor antar Tahun ===
+            if comparison_type == "Ekspor antar Tahun":
                 st.markdown("##### Bandingkan Tren Total Ekspor antar Tahun")
                 df_e_comp = data_ekspor["df"].copy()
                 try:
@@ -624,7 +447,7 @@ if data_ekspor or data_impor:
                 except Exception as e:
                     st.error(f"Error memproses perbandingan Ekspor antar Tahun: {e}")
 
-            # === 3. Impor antar Tahun ===
+            # === 2. Impor antar Tahun ===
             elif comparison_type == "Impor antar Tahun":
                 st.markdown("##### Bandingkan Tren Total Impor antar Tahun")
                 df_i_comp = data_impor["df"].copy()
@@ -677,9 +500,7 @@ if data_ekspor or data_impor:
 
         # Kondisi jika data awal tidak ada
         else:
-            if comparison_type == "Ekspor vs. Impor":
-                 st.warning("Data Ekspor dan Impor harus berhasil dimuat untuk menampilkan perbandingan ini.")
-            elif comparison_type == "Ekspor antar Tahun":
+            if comparison_type == "Ekspor antar Tahun":
                  st.warning("Data Ekspor harus berhasil dimuat untuk menampilkan perbandingan ini.")
             elif comparison_type == "Impor antar Tahun":
                  st.warning("Data Impor harus berhasil dimuat untuk menampilkan perbandingan ini.")
